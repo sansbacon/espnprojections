@@ -1,0 +1,29 @@
+site_name: espnprojections
+site_url: https://sansbacon.github.io/espnprojections
+site_description: python library to scrape, parse, and analyze espn projections
+site_author: Eric Truett
+repo_url: https://github.com/sansbacon/espnprojections
+
+theme:
+  name: material
+
+plugins:
+  - search
+  - mkdocstrings
+
+markdown_extensions:
+- toc:
+    permalink: true
+- admonition
+- codehilite
+- extra
+- pymdownx.superfences
+- pymdownx.tabbed
+
+nav:
+- espnprojections: index.md
+- features.md
+- Code Reference:
+    - scraper: scraper-reference.md
+    - parser: parser-reference.md
+
