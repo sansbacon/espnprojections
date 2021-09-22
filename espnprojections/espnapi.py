@@ -370,6 +370,7 @@ class ESPNProjections(ProjectionSource):
         # standardize player names
         return df.assign(plyr=lambda x: self.standardize_players(x))
 
+
     def standardize_players(self, df: pd.DataFrame) -> pd.Series:
         """Standardizes player names
         
@@ -382,7 +383,6 @@ class ESPNProjections(ProjectionSource):
         """
         # different approach for defenses
         # different rules for defense and players
-        s = pd.Series(np.where(df.pos == 'DST', 
-                     df.plyr.apply(nflnames.standardize_defense_name), 
+        return pd.Series(np.where(df.pos == 'DST', 
+                     df.team.str.lower() + ' defense', 
                      df.plyr.apply(nflnames.standardize_player_name)))
-        return s.str.replace(' d/st', '')
