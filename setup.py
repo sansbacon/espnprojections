@@ -17,7 +17,6 @@ def run():
           author_email="eric@erictruett.com",
           license="MIT",
           packages=find_packages(),
-          package_data={'tests': ["data/*.json"]},
           zip_safe=False)
 
 

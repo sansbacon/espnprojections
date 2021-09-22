@@ -19,9 +19,14 @@ Usage:
 import json
 import logging
 from pathlib import Path
-import time
+from typing import List
 
-from requests_html import HTMLSession
+import numpy as np
+import pandas as pd
+import requests
+
+import nflnames
+from nflprojections import ProjectionSource
 
 
 class Scraper:
@@ -33,14 +38,14 @@ class Scraper:
     def __init__(self, season):
         """Creates Scraper instance"""
         self.season = season
-        self._s = HTMLSession()
+        self._s = requests.Session()
 
     @property
-    def api_url(self):
+    def api_url(self) -> str:
         return f"https://fantasy.espn.com/apis/v3/games/ffl/seasons/{self.season}/segments/0/leaguedefaults/3"
 
     @property
-    def default_headers(self):
+    def default_headers(self) -> dict:
         return {
             "authority": "fantasy.espn.com",
             "accept": "application/json",
@@ -58,12 +63,11 @@ class Scraper:
         }
 
     @property
-    def default_params(self):
+    def default_params(self) -> dict:
         return {"view": "kona_player_info"}
 
- 
     @property
-    def xff(self):
+    def xff(self) -> dict:
         """Default x-fantasy-filter"""
         return {
             "players": {
@@ -76,17 +80,14 @@ class Scraper:
             }
         }
 
-    def get_json(self, url, headers, params, return_object=False):
+    def get_json(self, url, headers: dict = None, params: dict = None) -> dict:
         """Gets json response"""
         r = self._s.get(url, headers=headers, params=params)
-        if return_object:
-            return r
         return r.json()
 
-    def projections(self):
+    def projections(self) -> dict:
         """Gets all ESPN player projections """
-        headers = self.default_headers
-        return self.get_json(self.api_url, headers=headers, params=self.default_params)
+        return self.get_json(self.api_url, headers=self.default_headers, params=self.default_params)
 
 
 class Parser:
@@ -191,49 +192,15 @@ class Parser:
         "FA": 0,
     }
 
-    TEAM_CODES = {
-        'ARI': ['ARI', 'Arizona Cardinals', 'Cardinals', 'Arizona', 'crd'],
-        'ATL': ['ATL', 'Atlanta Falcons', 'Falcons', 'Atlanta', 'atl'],
-        'BAL': ['BAL', 'Baltimore Ravens', 'Ravens', 'Baltimore', 'rav'],
-        'BUF': ['BUF', 'Buffalo Bills', 'Bills', 'Buffalo', 'buf'],
-        'CAR': ['CAR', 'Carolina Panthers', 'Panthers', 'Carolina', 'car'],
-        'CHI': ['CHI', 'Chicago Bears', 'Bears', 'Chicago', 'chi'],
-        'CIN': ['CIN', 'Cincinnati Bengals', 'Bengals', 'Cincinnati', 'cin'],
-        'CLE': ['CLE', 'Cleveland Browns', 'Browns', 'Cleveland', 'cle'],
-        'DAL': ['DAL', 'Dallas Cowboys', 'Cowboys', 'Dallas', 'dal'],
-        'DEN': ['DEN', 'Denver Broncos', 'Broncos', 'Denver', 'den'],
-        'DET': ['DET', 'Detroit Lions', 'Lions', 'Detroit', 'det'],
-        'GB': ['GB', 'Green Bay Packers', 'Packers', 'Green Bay', 'GNB', 'gnb'],
-        'HOU': ['HOU', 'Houston Texans', 'Texans', 'Houston', 'htx'],
-        'IND': ['IND', 'Indianapolis Colts', 'Colts', 'Indianapolis', 'clt'],
-        'JAC': ['JAC', 'Jacksonville Jaguars', 'Jaguars', 'Jacksonville', 'jac', 'jax'],
-        'KC': ['KC', 'Kansas City Chiefs', 'Chiefs', 'Kansas City', 'kan', 'KAN'],
-        'LAC': ['LAC', 'Los Angeles Chargers', 'LA Chargers', 'San Diego Chargers', 'Chargers', 'San Diego', 'SD', 'sdg', 'SDG'],
-        'LAR': ['LAR', 'LA', 'Los Angeles Rams', 'LA Rams', 'St. Louis Rams', 'Rams', 'St. Louis', 'ram'],
-        'MIA': ['MIA', 'Miami Dolphins', 'Dolphins', 'Miami', 'mia'],
-        'MIN': ['MIN', 'Minnesota Vikings', 'Vikings', 'Minnesota', 'min'],
-        'NE': ['NE', 'New England Patriots', 'Patriots', 'New England', 'NEP', 'nwe', 'NWE'],
-        'NO': ['NO', 'New Orleans Saints', 'Saints', 'New Orleans', 'NOS', 'nor', 'NOR'],
-        'NYG': ['NYG', 'New York Giants', 'Giants', 'nyg'],
-        'NYJ': ['NYJ', 'New York Jets', 'Jets', 'nyj'],
-        'OAK': ['OAK', 'Oakland Raiders', 'Raiders', 'Oakland', 'rai'],
-        'PHI': ['PHI', 'Philadelphia Eagles', 'Eagles', 'Philadelphia', 'phi'],
-        'PIT': ['PIT', 'Pittsburgh Steelers', 'Steelers', 'Pittsburgh', 'pit'],
-        'SF': ['SF', 'San Francisco 49ers', '49ers', 'SFO', 'San Francisco', 'sfo'],
-        'SEA': ['SEA', 'Seattle Seahawks', 'Seahawks', 'Seattle', 'sea'],
-        'TB': ['TB', 'Tampa Bay Buccaneers', 'Buccaneers', 'TBO', 'tam', 'TAM', 'Tampa', 'Tampa Bay'],
-        'TEN': ['TEN', 'Tennessee Titans', 'Titans', 'Tennessee', 'oti'],
-        'WAS': ['WAS', 'Washington Redskins', 'Redskins', 'Washington', 'was']
-    }
+    TEAM_ID_MAP = {v: k for k, v in TEAM_MAP.items()}
 
     def __init__(self, season, week):
         """
             """
-        logging.getLogger(__name__).addHandler(logging.NullHandler())
         self.season = season
         self.week = week
 
-    def _find_projection(self, stats):
+    def _find_projection(self, stats: List[dict]) -> dict:
         """Simplified way to find projection or result"""
         mapping = {
             "seasonId": self.season,
@@ -246,35 +213,7 @@ class Parser:
             if {k: item[k] for k in mapping} == mapping:
                 return item
 
-    def _get_team_code(self, team):
-        """Standardizes team code across sites
-
-        Args:
-            team (str): the code or team name
-
-        Returns:
-            str: 2-3 letter team code, ATL, BAL, etc.
-
-        Examples:
-            >>>team_code('Ravens')
-            'BAL'
-
-            >>>team_code('JAC')
-            'JAX'
-        """
-        if team in self.TEAM_CODES:
-            return team
-        matches = [(k, v) for k, v in self.TEAM_CODES.items()
-                if (team in v or
-                    team.title() in v or
-                    team.lower() in v or
-                    team.upper() in v)
-                ]
-        if len(matches) == 1:
-            return matches[0][0]
-        raise ValueError(f'no match for {team}')
-
-    def _parse_stats(self, stat):
+    def _parse_stats(self, stat: dict) -> dict:
         """Parses stats dict"""
         return {
             self.STAT_MAP.get(str(k)): float(v)
@@ -282,23 +221,21 @@ class Parser:
             if str(k) in self.STAT_MAP
         }
 
-    def espn_team(self, team_code=None, team_id=None):
+    def espn_team(self, team_code: str = None, team_id: int = None) -> str:
         """Returns team_id given code or team_code given team_id"""
         if team_code:
-            tid = self.TEAM_MAP.get(team_code)
-            return tid if tid else self.TEAM_MAP.get(self._get_team_code(team_code))
-        elif team_id:
-            return {v: k for k, v in self.TEAM_MAP.items()}.get(int(team_id))
+            return self.TEAM_MAP.get(team_code)
+        return self.TEAM_ID_MAP.get(int(team_id))
 
-    def projections(self, content):
+    def projections(self, content: dict) -> List[dict]:
         """Parses the seasonal projections
         
         Args:
             content(dict): parsed JSON
-            week(int): 1-17
 
         Returns:
             list: of dict
+
         """
         proj = []
 
@@ -316,6 +253,7 @@ class Parser:
             }
 
             p["source_team_code"] = self.espn_team(team_id=p.get("source_team_id", 0))
+            p['source_player_position'] = self.POSITION_MAP.get(int(player['defaultPositionId']))
 
             # loop through player stats to find projections
             stat = self._find_projection(player["stats"])
@@ -327,7 +265,7 @@ class Parser:
                 proj.append(p)
         return proj
 
-    def weekly_projections(self, content, week):
+    def weekly_projections(self, content: dict) -> List[dict]:
         """Parses the weekly projections
 
         Args:
@@ -357,16 +295,94 @@ class Parser:
             p["source_player_position"] = self.POSITION_MAP.get(p["source_player_position"], "UNK")
 
             # loop through player stats to find weekly projections
-            stat = self._find_projection(player["stats"], week)
-            if stat:
-                p["source_player_projection"] = stat["appliedTotal"]
-                proj.append(dict(**p, **self._parse_stats(stat["stats"])))
-            else:
-                p["source_player_projection"] = None
+            try:
+                stat = self._find_projection(player["stats"])
+                if stat:
+                    p["source_player_projection"] = stat["appliedTotal"]
+                    proj.append(dict(**p, **self._parse_stats(stat["stats"])))
+                else:
+                    p["source_player_projection"] = None
+                    proj.append(p)
+            except KeyError:
                 proj.append(p)
-        return proj
+        return pd.DataFrame(proj)
 
 
+class ESPNProjections(ProjectionSource):
+    """Standardizes projections from espn.com"""
 
-if __name__ == "__main__":
-    pass
+    COLUMN_MAPPING = {
+        'source_player_position': 'pos',
+        'source_player_projection': 'proj',
+        'source_team_code': 'team',
+        'source_player_name': 'plyr'
+    }
+
+    def __init__(self, **kwargs):
+        """Creates object"""
+        kwargs['column_mapping'] = self.COLUMN_MAPPING
+        kwargs['projections_name'] = 'espn'
+        super().__init__(**kwargs)
+
+    def load_raw(self, season: int, week: int) -> pd.DataFrame:
+        """Loads raw projections
+        
+        Args:
+            season (int): the season, e.g. 2021
+            week (int): the week, e.g. 1
+
+        Returns:
+            pd.DataFrame
+
+        """
+        s = Scraper(season=season)
+        p = Parser(season=season, week=week)
+        data = p.weekly_projections(s.projections())
+        return pd.DataFrame(data)
+
+    def process_raw(self, df):
+        """Processes raw dataframe"""
+        wanted = ['source_player_position', 
+                  'source_player_name', 
+                  'source_player_id',
+                  'source_team_code', 
+                  'source_player_projection']
+        df = df.loc[:, wanted]
+        df.columns = self.remap_columns(df.columns)
+        return df
+
+    def standardize(self, df):
+        """Standardizes names/teams/positions
+        
+        Args:
+            df (pd.DataFrame): the projections dataframe
+
+        Returns
+            pd.DataFrame
+
+        """
+        # standardize team and opp
+        df = df.assign(team=self.standardize_teams(df.team.str.replace('WSH', 'WAS')))
+
+        # standardize positions
+        df = df.assign(pos=self.standardize_positions(df.pos))
+
+        # standardize player names
+        return df.assign(plyr=lambda x: self.standardize_players(x))
+
+    def standardize_players(self, df: pd.DataFrame) -> pd.Series:
+        """Standardizes player names
+        
+        Args:
+            df (pd.DataFrame): the projections dataframe
+
+        Returns:
+            pd.Series
+
+        """
+        # different approach for defenses
+        # different rules for defense and players
+        s = pd.Series(np.where(df.pos == 'DST', 
+                     df.plyr.apply(nflnames.standardize_defense_name), 
+                     df.plyr.apply(nflnames.standardize_player_name)))
+        return s.str.replace(' d/st', '')

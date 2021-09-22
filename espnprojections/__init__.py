@@ -1,2 +1,3 @@
-from .espnapi import *
-from .watson import *
+import logging
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
